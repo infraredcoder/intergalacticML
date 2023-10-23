@@ -1,0 +1,16 @@
+-- Create the view with your desired query
+CREATE OR REPLACE VIEW `your_project_id.your_dataset.your_view_name` AS
+SELECT
+  column1,
+  column2
+FROM
+  `your_project_id.your_dataset.your_source_table`;
+
+-- Add labels to the view using ALTER VIEW statement
+ALTER VIEW `your_project_id.your_dataset.your_view_name`
+SET OPTIONS (
+  labels = [
+    ('key1', 'value1'),
+    ('key2', 'value2')
+  ]
+);
