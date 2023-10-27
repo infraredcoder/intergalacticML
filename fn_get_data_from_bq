@@ -1,0 +1,45 @@
+import pandas as pd
+from google.cloud import bigquery
+
+def fetch_bigquery_data(start_date, end_date, tenant_name=None):
+    # Check if start_date and end_date are valid date strings
+    try:
+        pd.to_datetime(start_date)
+        pd.to_datetime(end_date)
+    except ValueError:
+        raise ValueError("Invalid date format for start_date or end_date. Use 'YYYY-MM-DD'.")
+
+    # Initialize the BigQuery client
+    client = bigquery.Client()
+
+    # Define the query to fetch the data
+    query = f"""
+    SELECT message, severity, log_ts, application_nm, lob_cd, environment_nm,
+           component_nm, email, project_nm, tenant_nm,
+           source_location.file_nm, source_location.function_nm, source_location.line_nbr,
+           JSON_EXTRACT_SCALAR(payload_json, '$.key1') AS key1,
+           JSON_EXTRACT_SCALAR(payload_json, '$.key2') AS key2,
+           JSON_EXTRACT_SCALAR(payload_json, '$.key3') AS key3
+    FROM your_project.your_dataset.platform_custom_logs
+    WHERE DATE(log_ts) BETWEEN DATE('{start_date}') AND DATE('{end_date}')
+    """
+
+    # Add a filter for tenant_name if provided
+    if tenant_name:
+        query += f" AND tenant_nm = '{tenant_name}'"
+
+    # Run the query and fetch the result
+    query_job = client.query(query)
+    results = query_job.result()
+
+    # Convert the result to a DataFrame
+    df = results.to_dataframe()
+
+    return df
+
+# Example usage:
+start_date = "2023-10-01"
+end_date = "2023-10-20"
+tenant_name = "example_tenant"
+data_frame = fetch_bigquery_data(start_date, end_date, tenant_name)
+print(data_frame)
