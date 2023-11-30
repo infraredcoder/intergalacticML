@@ -1,0 +1,34 @@
+from google.cloud import pubsub_v1
+
+project_id = 'your-project-id'
+topic_name = 'your-topic-name'
+
+# Create a Pub/Sub client
+publisher = pubsub_v1.PublisherClient()
+
+# Create the fully qualified topic path
+topic_path = publisher.topic_path(project_id, topic_name)
+
+# List the topic's subscriptions
+response = publisher.list_topic_subscriptions(request={'topic': topic_path})
+
+# Iterate through subscriptions and pull messages
+for subscription in response:
+    subscription_path = subscription.split('/')[-1]
+    subscriber = pubsub_v1.SubscriberClient()
+    
+    # Pull messages from subscription
+    response = subscriber.pull(
+        request={
+            'subscription': subscription_path,
+            'max_messages': 10,  # Adjust as needed
+        }
+    )
+
+    # Process pulled messages
+    for received_message in response.received_messages:
+        print(f"Received message: {received_message.message.data}")
+
+    # Acknowledge the processed messages
+    ack_ids = [message.ack_id for message in response.received_messages]
+    subscriber.acknowledge(request={'subscription': subscription_path, 'ack_ids': ack_ids})
