@@ -32,3 +32,11 @@ for subscription in response:
     # Acknowledge the processed messages
     ack_ids = [message.ack_id for message in response.received_messages]
     subscriber.acknowledge(request={'subscription': subscription_path, 'ack_ids': ack_ids})
+
+
+"""
+
+gcloud pubsub subscriptions pull --project=your-project-id --subscription=your-subscription-name --auto-ack --limit=10
+
+
+"""
