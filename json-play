@@ -1,0 +1,14 @@
+import json
+
+original_string = '{"your_parameter": "value_with_\\n_\\_and_}"}'
+
+# Load JSON string as a Python object
+original_json = json.loads(original_string)
+
+# Manipulate the necessary values
+original_json['your_parameter'] = original_json['your_parameter'].replace("\\n", "").replace("\\", "").replace("}", "")
+
+# Convert the updated object back to a JSON string
+updated_string = json.dumps(original_json)
+
+# Now updated_string contains the modified JSON string
