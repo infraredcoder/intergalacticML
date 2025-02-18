@@ -1,1 +1,168 @@
-Hello World
+Topic:
+Implementing Data Quality Checks in a GCP ETL/ELT Pipeline with Great Expectations
+
+Why This Topic Is Interesting:
+	1.	Data Quality is Critical: Ensuring data integrity in your pipelines is essential.
+	2.	Practical Integration: Great Expectations (GE) is a popular open-source framework that provides a systematic way to test, document, and maintain data quality.
+	3.	Composer-Friendly: You can easily integrate GE checks as tasks in your Cloud Composer (Airflow) DAGs to automate data validation.
+	4.	Hands-On Demo: Demonstrates how to incorporate a new tool into an existing GCP stack: Python, BigQuery, and potentially Dataproc.
+
+30-Minute Session Breakdown
+
+1. Introduction (5 minutes)
+	•	What is Great Expectations?
+	•	Quick overview: open-source, Python-based data quality framework.
+	•	Key features: “Expectations” (data tests), Data Docs (auto-generated documentation), Checkpoints (bundled validations).
+	•	Why Integrate With GCP?
+	•	Flexible orchestration using Composer (Airflow).
+	•	Large-scale data storage/processing with BigQuery and Dataproc.
+	•	Automation potential in a DAG workflow.
+
+2. Live Demo Setup (15 minutes)
+
+A. Prerequisites
+	1.	Composer Environment: An existing Composer DAG folder or Git repo.
+	2.	BigQuery Table: A sample dataset in BigQuery, e.g., a public dataset like bigquery-public-data.samples.shakespeare or any internal table you already have.
+	3.	Python Environment: Great Expectations library installed (locally or in a container you’re using for your DAGs).
+
+pip install great-expectations
+
+B. Project Initialization
+	•	On your local machine (or a Cloud Shell instance), initialize a Great Expectations project:
+
+great_expectations init
+
+
+	•	This creates a great_expectations/ folder with preconfigured structure for storing expectations, validations, and documentation.
+
+C. Create a Sample Expectation Suite
+	1.	Connect to your BigQuery data
+	•	In great_expectations/great_expectations.yml, configure a BigQuery datasource:
+
+datasources:
+  my_bigquery_datasource:
+    class_name: Datasource
+    execution_engine:
+      class_name: SqlAlchemyExecutionEngine
+      connection_string: bigquery://<PROJECT_ID>?dataset=<DATASET>
+    data_connectors:
+      default_runtime_data_connector_name:
+        class_name: RuntimeDataConnector
+        batch_identifiers: ["default_identifier_name"]
+
+
+	2.	Define Expectations
+	•	For demonstration, create a few basic expectations for a BigQuery table (e.g., ensuring no NULL values in a certain column, checking row counts, or verifying numeric ranges):
+
+from great_expectations.core import ExpectationSuite
+
+# CLI-based: great_expectations suite new 
+# or programmatically:
+suite = context.create_expectation_suite(
+  expectation_suite_name="my_first_suite", overwrite_existing=True
+)
+
+batch_request = {
+  "datasource_name": "my_bigquery_datasource",
+  "data_connector_name": "default_runtime_data_connector_name",
+  "data_asset_name": "my_table",
+  "runtime_parameters": {
+    "query": "SELECT * FROM `<PROJECT_ID>.<DATASET>.<TABLE>` LIMIT 1000"
+  },
+  "batch_identifiers": {"default_identifier_name": "test_run"},
+}
+
+validator = context.get_validator(
+  batch_request=batch_request, expectation_suite_name="my_first_suite"
+)
+
+validator.expect_column_values_to_not_be_null("some_column")
+validator.expect_column_values_to_be_between("numeric_column", min_value=0, max_value=10000)
+
+validator.save_expectation_suite(discard_failed_expectations=False)
+
+
+
+D. Run a Validation & Generate Data Docs
+	•	Execute a validation run locally:
+
+checkpoint_config = {
+    "name": "my_checkpoint",
+    "config_version": 1.0,
+    "class_name": "SimpleCheckpoint",
+    "validation_operator_name": "action_list_operator",
+    "batches": [batch_request],
+}
+
+checkpoint = context.test_yaml_config(yaml_config=yaml.dump(checkpoint_config))
+checkpoint_result = checkpoint.run()
+context.build_data_docs()
+context.open_data_docs()
+
+
+	•	This will produce Data Docs, an HTML report showing which expectations passed/failed.
+
+3. Orchestrating in Composer (10 minutes)
+
+A. Composer DAG Basics
+	•	In your Composer environment (Airflow), you’ll have a DAG file, e.g., great_expectations_dag.py.
+
+B. Create a Python Operator for Validation
+	•	Use the PythonOperator in Airflow to trigger GE validation.
+	•	Make sure your Composer environment has Great Expectations installed (via requirements.txt or environment dependencies).
+
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime
+import os
+import great_expectations as ge
+
+def run_ge_validation():
+    # Path to your Great Expectations context within Composer
+    context = ge.DataContext(
+        context_root_dir="/home/airflow/gcs/data/great_expectations"
+    )
+    # Load checkpoint or create on the fly
+    checkpoint_result = context.run_checkpoint(checkpoint_name="my_checkpoint")
+    # Optionally, handle success/failure logic
+    if not checkpoint_result["success"]:
+        raise ValueError("Data Quality Checks Failed")
+
+default_args = {
+    "start_date": datetime(2025, 1, 1),
+    "retries": 1,
+}
+
+with DAG(
+    "great_expectations_demo_dag",
+    default_args=default_args,
+    schedule_interval="@once",
+) as dag:
+
+    ge_validation_task = PythonOperator(
+        task_id="ge_validation_task",
+        python_callable=run_ge_validation,
+    )
+
+C. Observing the Results
+	•	Trigger the DAG from Composer’s Airflow UI.
+	•	Check logs to see pass/fail results.
+	•	Optionally, push Data Docs to GCS and serve them for easy team access.
+
+Key Takeaways
+	1.	Automated Data Quality: Great Expectations seamlessly integrates with your GCP environment, letting you run checks on BigQuery data.
+	2.	Composer Orchestration: Turn your validation into an automated step in your ETL/ELT pipelines.
+	3.	Visibility and Documentation: Data Docs provide immediate feedback on data health and can be shared with stakeholders.
+
+Tips for Presenting
+	1.	Keep It Hands-On: Show real code and logs rather than just slides.
+	2.	Highlight Real-World Edge Cases: For example, demonstrate how a failing check halts the pipeline or sends a Slack/email alert.
+	3.	Encourage Interactive Questions: Ask your team about use cases in their current data flows where data quality is a concern.
+	4.	Follow-Up: Provide resources (GE docs, sample code) so teammates can replicate the demo in their own environments.
+
+Estimated Time: 30 minutes
+	1.	Intro & Explanation of Great Expectations: ~5 mins
+	2.	Demo Setup & Walkthrough: ~15 mins
+	3.	Q&A / Discussion: ~10 mins
+
+This session will give your team a tangible example of how to enhance data reliability in GCP pipelines using Composer, Python, and Great Expectations. It’s a high-value skill that can be immediately applied to your ongoing projects. Have fun presenting!
